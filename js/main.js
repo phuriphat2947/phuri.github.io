@@ -13,6 +13,7 @@ const App = (() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; } catch { return null; }
   }
   function save(data) {
+    data.lastUpdated = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     // Auto-sync: update the JSON preview indicator
     const indicator = $('#syncIndicator');
@@ -38,12 +39,27 @@ const App = (() => {
   }
 
   async function initData() {
-    let data = load();
-    if (!data) {
-      data = await loadFromJSON();
-      save(data);
+    let localData = load();
+    let serverData = await loadFromJSON();
+
+    // Compare timestamps to decide which data is newer
+    let localTime = localData && localData.lastUpdated ? localData.lastUpdated : 0;
+    let serverTime = serverData && serverData.lastUpdated ? serverData.lastUpdated : 0;
+
+    if (!localData || serverTime > localTime) {
+      // Server has newer data (e.g. after uploading a new JSON file) or first load
+      save(serverData);
+      return serverData;
+    } else {
+      // Local has newer data (e.g. user is editing but hasn't exported yet)
+      if (localTime > serverTime) {
+        setTimeout(() => {
+          const indicator = $('#syncIndicator');
+          if (indicator) indicator.textContent = '● มีการเปลี่ยนแปลงที่ยังไม่เซฟ';
+        }, 500);
+      }
+      return localData;
     }
-    return data;
   }
 
   function exportData() {
